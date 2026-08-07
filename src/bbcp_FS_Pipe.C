@@ -189,10 +189,10 @@ int bbcp_FS_Pipe::Setup(const char *args, char **Arg, int maxArgs)
         Arg[j] = pp;
        }
 
-// Make sure we did not overflow the buffer
+// Make sure we did not overflow the buffer. Note that Arg[1] holds the
+// strdup'ed argument string and is released by the caller's ArgList.
 //
    if (j < maxArgs-1) Arg[j] = 0;
-      else free(Arg[0]);
    return (j < maxArgs);
 }
 

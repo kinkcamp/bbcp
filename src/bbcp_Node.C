@@ -195,7 +195,8 @@ int bbcp_Node::Run(char *user, char *host, char *prog, char *parg)
 //
    if (*nodename != '[') sshDest = nodename;
       else {int i = strlen(nodename);
-            if (i > (int)sizeof(bufDest)) return -EHOSTUNREACH;
+            if (i < 3 || nodename[i-1] != ']' || i >= (int)sizeof(bufDest))
+               return -EHOSTUNREACH;
             strcpy(bufDest, nodename+1);
             bufDest[i-2] = 0; sshDest= bufDest;
            }
@@ -397,7 +398,10 @@ int bbcp_Node::RecvFile(bbcp_FileSpec *fp, bbcp_Node *Remote)
        retc = bbcp_OS.Waitpid(Child);
        Parent_Monitor.Stop();
        if (bbcp_Cfg.Options & bbcp_BLAB)
-          write(STDERR_FILENO, buff, Usage("Target", buff, sizeof(buff)));
+          {int wn = Usage("Target", buff, sizeof(buff));
+           if (wn > (int)sizeof(buff)) wn = sizeof(buff);
+           if (wn > 0) write(STDERR_FILENO, buff, wn);
+          }
        return retc;
       }
 
@@ -427,15 +431,16 @@ int bbcp_Node::RecvFile(bbcp_FileSpec *fp, bbcp_Node *Remote)
 //
    Elapsed_Timer.Start();
    if (!(outFile = fp->FSys()->Open(Path, oflag, Mode, Args)))
-      return bbcp_Emsg("RecvFile", errno, Act, Path);
+      {bbcp_Emsg("RecvFile", errno, Act, Path); _exit(100);}
    if (startoff && ((retc = outFile->Seek(startoff)) < 0))
-      return bbcp_Emsg("RecvFile",retc,"setting write offset for",Path);
+      {bbcp_Emsg("RecvFile",retc,"setting write offset for",Path); _exit(100);}
    outFile->setSize(fp->Info.size);
 
 // If compression is wanted, set up the compression objects
 //
    if (bbcp_Cfg.Options & bbcp_COMPRESS 
-   && !(cxp = setup_CX(0, outFile->ioFD()))) return -ECANCELED;
+   && !(cxp = setup_CX(0, outFile->ioFD()))) _exit(ECANCELED > 255 ? 255
+                                                                   : ECANCELED);
 
 // Start a thread for each data link we have
 //
@@ -502,7 +507,7 @@ int bbcp_Node::RecvFile(bbcp_FileSpec *fp, bbcp_Node *Remote)
 
 // Make sure that all of the bytes were transfered
 //
-   if (!retc && strncmp(Path, "/dev/null/", 10))
+   if (!retc && strcmp(Path, "/dev/null"))
       {bbcp_FileInfo Info;
        if ((retc = fp->FSys()->Stat(Path, &Info)) < 0)
           {retc = -retc;
@@ -581,7 +586,10 @@ int bbcp_Node::SendFile(bbcp_FileSpec *fp)
        retc = bbcp_OS.Waitpid(Child);
        Parent_Monitor.Stop();
        if (bbcp_Cfg.Options & bbcp_BLAB)
-          write(STDERR_FILENO, buff, Usage("Source", buff, sizeof(buff)));
+          {int wn = Usage("Source", buff, sizeof(buff));
+           if (wn > (int)sizeof(buff)) wn = sizeof(buff);
+           if (wn > 0) write(STDERR_FILENO, buff, wn);
+          }
        return retc;
       }
 
@@ -605,12 +613,15 @@ int bbcp_Node::SendFile(bbcp_FileSpec *fp)
        exit(2);
       }
    if (fp->targetsz && ((retc = inFile->Seek(fp->targetsz)) < 0))
-      return bbcp_Emsg("SendFile",retc,"setting read offset for",fp->pathname);
+      {bbcp_Emsg("SendFile",retc,"setting read offset for",fp->pathname);
+       _exit(100);
+      }
 
 // If compression is wanted, set up the compression objects
 //
    if (bbcp_Cfg.Options & bbcp_COMPRESS 
-   && !(cxp = setup_CX(1, inFile->ioFD()))) return -ECANCELED;
+   && !(cxp = setup_CX(1, inFile->ioFD()))) _exit(ECANCELED > 255 ? 255
+                                                                   : ECANCELED);
 
 // Start a thread for each data link we have
 //

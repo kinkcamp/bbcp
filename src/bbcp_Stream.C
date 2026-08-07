@@ -493,9 +493,9 @@ int bbcp_Stream::Put(const char *data, int dlen) {
     if (flags & bbcp_Stream_BUSY) {ecode = ETXTBSY; return -1;}
 
     while(dcnt)
-         {do { retc = write(FE, (const void *)data, (size_t)dlen);}
+         {do { retc = write(FE, (const void *)data, (size_t)dcnt);}
               while (retc < 0 && errno == EINTR);
-          if (retc >= 0) dcnt -= retc;
+          if (retc >= 0) {data += retc; dcnt -= retc;}
              else {flags |= bbcp_Stream_BUSY;
                    bbcp_Emsg("Put", errno, "writing to stream.");
                    flags &= ~bbcp_Stream_BUSY;

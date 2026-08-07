@@ -49,20 +49,26 @@ SUNGCCOPT  = -L/usr/local/lib -g \
 SUNGCC     = g++
 SUNGcc     = gcc
 
+# Security hardening flags for gcc/clang based platforms
+SECFLAGS   = -O2 -Wall -Wformat -Wformat-security -fstack-protector-strong \
+             -D_FORTIFY_SOURCE=2
+
 LNXOPT     = $(SUN64) $(NLGR) -D_REENTRANT -DOO_STD -DLINUX -Wno-deprecated \
-             -D_GNU_SOURCE -g
+             -D_GNU_SOURCE -g $(SECFLAGS)
 LNXOPT_B   = $(SUN64) $(NLGR) -D_REENTRANT -DOO_STD -DLINUX \
-             -D_GNU_SOURCE -g
+             -D_GNU_SOURCE -g $(SECFLAGS)
 
 LNXCC      = g++
 LNXcc      = gcc
 
-BSDOPT     = $(SUN64) $(NLGR) -D_REENTRANT -DOO_STD -DFREEBSD -pthread
+BSDOPT     = $(SUN64) $(NLGR) -D_REENTRANT -DOO_STD -DFREEBSD -pthread \
+             $(SECFLAGS)
 
 BSDCC      = g++
 BSDcc      = gcc
 
-MACOPT     = $(SUN64) $(NLGR) -D_REENTRANT -DOO_STD -DMACOS -Wno-deprecated -g
+MACOPT     = $(SUN64) $(NLGR) -D_REENTRANT -DOO_STD -DMACOS -Wno-deprecated \
+             -g -fstack-protector-strong
 
 MACCC      = g++
 MACcc      = gcc

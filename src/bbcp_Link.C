@@ -185,9 +185,12 @@ int bbcp_Link::Net2Buff()
       //
          if (!bbcp_BPool.Decode(inbuff)) {ecode = IHS; break;}
 
-      // Make sure the read length does not overflow our buffer
+      // Make sure the read length does not overflow our buffer. Note that
+      // a negative blen is never valid on the wire (control messages are
+      // always sent with a blen of zero); accepting it would turn into a
+      // huge size_t in Read() and overflow the buffer.
       //
-         if ((rdsz = inbuff->blen) > maxrdsz) {ecode = IBL; break;}
+         if ((rdsz = inbuff->blen) < 0 || rdsz > maxrdsz) {ecode = IBL; break;}
 
       // Read data into the buffer and do checksum if needed
       //

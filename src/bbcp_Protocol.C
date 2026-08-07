@@ -251,7 +251,7 @@ void bbcp_Protocol::getEnd(bbcp_Node *Node)
       && (wp = Node->GetToken()) && !strcmp(wp, "200")
       && (wp = Node->GetToken()))
         {if (!strcmp(wp, "cks:"))
-            {if (!(wp=Node->GetToken()) || (n = strlen(wp)) > sizeof(csVal))
+            {if (!(wp=Node->GetToken()) || (n = strlen(wp)) >= sizeof(csVal))
                 continue;
              strcpy(csVal, wp);
              if (!(wp = Node->GetToken())) continue;
@@ -771,8 +771,9 @@ int bbcp_Protocol::Request_flist(long long &totsz, int &numlinks, bool dotrim)
         {fp = new bbcp_FileSpec(fs_obj, Remote->NodeName());
          if (fp->Decode(lp)) {numfiles = -1; break;}
 
-               if (fp->Compose(tdir_id, tdir, tdln, tfn)
-               &&  (retc = fp->Xfr_Done()))
+               if ((retc = fp->Compose(tdir_id, tdir, tdln, tfn)) < 0)
+                  {delete fp; numfiles = -1; break;}
+          else if (retc && (retc = fp->Xfr_Done()))
                   {delete fp; if (retc < 0) {numfiles = -1; break;}}
           else if (fp->Info.Otype == 'd')
                   {if (dotrim) {fp->setTrim(); dotrim = false;}

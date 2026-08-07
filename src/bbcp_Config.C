@@ -51,6 +51,9 @@
 #include <sys/types.h>
 #include <sys/resource.h>
 #include <sys/uio.h>
+#if defined(__linux__)
+#include <sys/random.h>
+#endif
 
 #define  BBCP_CONFIG_DEBUG
 #define  BBCP_IOMANIP
@@ -1101,18 +1104,45 @@ void bbcp_Config::Config_Xeq(int rwbsz)
   
 char *bbcp_Config::Rtoken()
 {
-   int mynum = (int)getpid();
-   struct timeval tod;
-   char mybuff[sizeof(mynum)*2+1];
+   unsigned char rnd[16];
+   char mybuff[sizeof(rnd)*2+1];
+   ssize_t got = -1;
 
-// Get current time of day and add into the random equation
+// Fill the buffer with strong random bytes. The token is our only login
+// credential, so pid/time based values are not acceptable.
 //
-   gettimeofday(&tod, 0);
-   mynum = mynum ^ tod.tv_sec ^ tod.tv_usec ^ (tod.tv_usec<<((mynum & 0x0f)+1));
+#if defined(__linux__)
+   got = getrandom(rnd, sizeof(rnd), 0);
+#endif
+   if (got != (ssize_t)sizeof(rnd))
+      {int fd = open("/dev/urandom", O_RDONLY);
+       if (fd >= 0)
+          {got = 0;
+           while(got < (ssize_t)sizeof(rnd))
+                {ssize_t n = read(fd, rnd+got, sizeof(rnd)-got);
+                 if (n <= 0) {got = -1; break;}
+                 got += n;
+                }
+           close(fd);
+          }
+      }
+
+// Fall back to a pid/time mix only if no entropy source was available
+//
+   if (got != (ssize_t)sizeof(rnd))
+      {struct timeval tod;
+       int mynum = (int)getpid();
+       gettimeofday(&tod, 0);
+       mynum = mynum ^ tod.tv_sec ^ tod.tv_usec ^ (tod.tv_usec<<((mynum & 0x0f)+1));
+       memset(rnd, 0, sizeof(rnd));
+       memcpy(rnd, &mynum, sizeof(mynum));
+       memcpy(rnd+sizeof(mynum), &tod, sizeof(tod) <= sizeof(rnd)-sizeof(mynum)
+                                       ? sizeof(tod) : sizeof(rnd)-sizeof(mynum));
+      }
 
 // Convert to a printable string
 //
-   tohex((char *)&mynum, sizeof(mynum), mybuff);
+   tohex((char *)rnd, sizeof(rnd), mybuff);
    return strdup(mybuff);
 }
 
@@ -1122,38 +1152,54 @@ char *bbcp_Config::Rtoken()
 
 int bbcp_Config::a2sz(const char *etxt, char *item, int  &result,
                       int  minv, int  maxv)
-{   int i = strlen(item)-1; char cmult = item[i];
+{   int i;
+    long long lval;
+    char cmult, *endC;
     int  val, qmult = 1;
-    char *endC;
+    if (!item || !(i = strlen(item)))
+       return bbcp_Fmsg("Config", "Invalid", etxt, "-", "(empty)");
+    i--; cmult = item[i];
          if (cmult == 'k' || cmult == 'K') qmult = 1024;
     else if (cmult == 'm' || cmult == 'M') qmult = 1024*1024;
     else if (cmult == 'g' || cmult == 'G') qmult = 1024*1024*1024;
     if (qmult > 1) item[i] = '\0';
-    val  = strtol(item, &endC, 10) * qmult;
-    if (*endC || (maxv != -1 && (val > maxv || val < 1)) || val < minv)
+    errno = 0;
+    lval = strtol(item, &endC, 10);
+    lval = (errno || lval < 0 ? -1 : lval * (long long)qmult);
+    if (*endC || lval > (long long)0x7fffffff
+    ||  (maxv != -1 && (lval > maxv || lval < 1)) || lval < minv)
        {if (qmult > 1) item[i] = cmult;
         return bbcp_Fmsg("Config", "Invalid", etxt, "-",item);
        }
     if (qmult > 1) item[i] = cmult;
+    val = (int)lval;
     result = val;
     return 0;
 }
 
 int bbcp_Config::a2tm(const char *etxt, char *item, int  &result,
                       int  minv, int  maxv)
-{   int i = strlen(item)-1; char cmult = item[i];
+{   int i;
+    long long lval;
+    char cmult, *endC;
     int  val, qmult = 1;
-    char *endC;
+    if (!item || !(i = strlen(item)))
+       return bbcp_Fmsg("Config", "Invalid", etxt, "-", "(empty)");
+    i--; cmult = item[i];
          if (cmult == 's' || cmult == 'S') qmult =  1;
     else if (cmult == 'm' || cmult == 'M') qmult = 60;
     else if (cmult == 'h' || cmult == 'H') qmult = 60*60;
     if (qmult > 1) item[i] = '\0';
-    val  = strtol(item, &endC, 10) * qmult;
-    if (*endC || (maxv != -1 && (val > maxv || val < 1)) || val < minv)
+    errno = 0;
+    lval = strtol(item, &endC, 10);
+    lval = (errno || lval < 0 ? -1 : lval * (long long)qmult);
+    if (*endC || lval > (long long)0x7fffffff
+    ||  (maxv != -1 && (lval > maxv || lval < 1)) || lval < minv)
        {if (qmult > 1) item[i] = cmult;
         return bbcp_Fmsg("Config", "Invalid", etxt, "-",item);
        }
     if (qmult > 1) item[i] = cmult;
+    val = (int)lval;
     result = val;
     return 0;
 }

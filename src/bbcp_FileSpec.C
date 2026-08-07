@@ -178,8 +178,12 @@ int bbcp_FileSpec::Compose(long long did, char *dpath, int dplen, char *fname)
 
 // If the output is a program, there is nothing to compse
 
-// Set up the target file name
+// Set up the target file name (reject path traversal attempts and names
+// shorter than the directory prefix we are supposed to trim off)
 //
+   if (strstr(fn, "../") || !strcmp(fn, "..") || !strcmp(fn, ".")
+   ||  trimDir > (int)strlen(fn))
+      return bbcp_Fmsg("Compose", "rejecting unsafe source name", fn);
    n = dplen + 1 + strlen(fn) + 1;
    if (targpath) free(targpath);
    targpath = (char *)malloc(n);
@@ -286,7 +290,10 @@ int bbcp_FileSpec::Decode(char *buff, char *xName)
 // Prehandle symlinks
 //
    if (Info.Otype == 'l' || Info.Otype == 'L')
-      {*(fnbuff+Info.size) = 0;
+      {if (Info.size < 0 || Info.size >= (long long)sizeof(fnbuff)-1)
+          return bbcp_Fmsg("Decode", "invalid symlink specification from",
+                           (xName ? xName : hostname));
+       *(fnbuff+Info.size) = 0;
        Info.SLink = strdup(fnbuff+Info.size+1);
       }
 
